@@ -25,6 +25,17 @@ spaces :: Parser ()
 spaces = skipMany1 space
 
 
+escapedChars :: Parser Char
+escapedChars = do char '\\' 
+                  x <- oneOf "\\\"nrt" 
+                  return $ case x of 
+                    '\\' -> x
+                    '"'  -> x
+                    'n'  -> '\n'
+                    'r'  -> '\r'
+                    't'  -> '\t'
+
+
 readExpr :: String -> String
 readExpr input = case parse parseExpr "lisp" input of
     Left err -> "No match: " ++ show err
@@ -34,13 +45,18 @@ readExpr input = case parse parseExpr "lisp" input of
 -- parsers
 parseExpr :: Parser LispVal
 parseExpr = parseAtom
-    <|> parseString
-    <|> parseNumber
-          
+          <|> parseString
+          <|> parseNumber
+          <|> parseQuoted
+          <|> do char '('
+                 x <- try parseList <|> parseDottedList
+                 char ')'
+                 return x
+    
+              
                 
 parseAtom :: Parser LispVal
-parseAtom = do
-                first <- letter <|> symbol
+parseAtom  = do first <- letter <|> symbol
                 rest <- many (letter <|> digit <|> symbol)
                 let atom = first:rest -- same as [first] ++ rest
                 return $ case atom of
@@ -50,18 +66,40 @@ parseAtom = do
 
 
 parseString :: Parser LispVal
-parseString = do
-                char '"'
-                x <- many (noneOf "\"")
-                char '"'
-                return $ String x
-                            
+parseString = do char '"'
+                 x <- many $ escapedChars <|> noneOf "\"\\"
+                 char '"'
+                 return $ String x
+                                                        
 
 parseNumber :: Parser LispVal
-parseNumber = liftM (Number . read) $ many1 digit
+parseNumber = many1 digit >>= \x -> (return . Number .read) x 
+{-
+parseNumber = liftM (Number . read) $ many1 digit                       This is equivalent to...
+parseNumber = do x <- many1 digit                                       ...this example and...
+                (return . Number . read) x
+parseNumber = many1 digit >>= \x -> (return . Number .read) x           ...this example
+-}      
+                
+
+parseList :: Parser LispVal
+parseList = liftM List $ sepBy parseExpr spaces
 
 
+parseDottedList :: Parser LispVal
+parseDottedList = do
+    head <- endBy parseExpr spaces
+    tail <- char '.' >> spaces >> parseExpr
+    return $ DottedList head tail
+    
 
+parseQuoted :: Parser LispVal
+parseQuoted = do
+    char '\''
+    x <- parseExpr
+    return $ List [Atom "quote", x]
+    
+    
 
 
 
