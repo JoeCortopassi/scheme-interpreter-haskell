@@ -2,6 +2,7 @@ module Main where
 import Control.Monad
 import Text.ParserCombinators.Parsec hiding (spaces)
 import System.Environment
+instance Show LispVal where show = showVal
 
 main :: IO ()
 main = do
@@ -39,7 +40,21 @@ escapedChars = do char '\\'
 readExpr :: String -> String
 readExpr input = case parse parseExpr "lisp" input of
     Left err -> "No match: " ++ show err
-    Right _ -> "Found value"
+    Right val -> "Found value: " ++ show val
+    
+    
+showVal :: LispVal -> String
+showVal (String contents) = "\"" ++ contents ++ "\""
+showVal (Atom name) = name
+showVal (Number contents) = show contents
+showVal (Bool True) = "#t"
+showVal (Bool False) = "#f"
+showVal (List contents) = "(" ++ unwordsList contents ++ ")"
+showVal (DottedList head tail) = "(" ++ unwordsList head ++ " . " ++ showVal tail ++ ")"
+
+
+unwordsList :: [LispVal] -> String
+unwordsList = unwords . map showVal
     
     
 -- parsers
